@@ -12,6 +12,7 @@
   --miss: #6b747d;
   --on-state: #ffffff;
   --focus: #1d6fd8;
+  --coin: #d19a12;
   --scrim: rgba(10, 14, 18, 0.45);
   --font-display: "Space Grotesk", system-ui, sans-serif;
   --font-body: "Inter", system-ui, sans-serif;
@@ -29,6 +30,7 @@
     --near: #c99a14;
     --miss: #4a535c;
     --focus: #6aa8f5;
+    --coin: #e0ab26;
     color-scheme: dark;
   }
 }
@@ -44,6 +46,7 @@
   --near: #c99a14;
   --miss: #4a535c;
   --focus: #6aa8f5;
+  --coin: #e0ab26;
   color-scheme: dark;
 }
 
@@ -134,6 +137,45 @@ body.open #scrim { display: block; }
 .stat span { color: var(--muted); font-size: 12px; }
 .panel .primary { align-self: flex-start; }
 .credit { margin: 0; color: var(--muted); font-size: 12px; }
+
+/* Timer and coins */
+.hud {
+  width: 100%; max-width: 540px;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 14px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.hud-item { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.hud-item b { font: 700 20px/1 var(--font-display); }
+.hud .clock { min-width: 3.2ch; }
+.hud-label { color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+.hud-item.now[data-level="high"] b { color: var(--good); }
+.hud-item.now[data-level="mid"] b { color: var(--near); }
+.hud-item.now[data-level="low"] b { color: var(--muted); }
+.hud-item.total { justify-content: flex-end; }
+.coin { flex: none; }
+#totalCoins.bump { animation: bump 0.5s ease; }
+@keyframes bump { 40% { transform: scale(1.35); } }
+
+/* Start overlay on top of the board */
+.board-wrap { position: relative; display: grid; justify-items: center; max-width: 100%; }
+.start {
+  position: absolute; inset: -8px; z-index: 5;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  padding: 16px; text-align: center; border-radius: 10px;
+  background: var(--bg);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
+.start[hidden] { display: none; }
+.start-hint { margin: 0; max-width: 28ch; color: var(--muted); }
+.primary.big { padding: 14px 32px; font-size: 16px; }
+.primary:disabled { opacity: 0.6; cursor: default; }
+.kb.off { opacity: 0.45; pointer-events: none; }
+
+.rules { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--fg); }
+.rules li::marker { color: var(--muted); }
 
 @media (min-width: 900px) {
   .app { display: grid; grid-template-columns: minmax(0, 1fr) 288px; column-gap: 48px; align-items: start; }

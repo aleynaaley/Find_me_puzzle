@@ -14,6 +14,20 @@ absolute birthday calendar daughter elephant favorite generous hospital internet
     tr: ["ERTYUIOPĞÜ", "ASDFGHJKLŞİ", "ZCVBNMÖÇ"],
     en: ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"]
   };
+  // Scoring: every round starts at SCORE.max coins. Each guess after the first costs 1 coin,
+  // and every SCORE.every seconds past a grace period costs 1 more. The floor is SCORE.min.
+  // A round that is not solved earns 0. Change the numbers here to tune the game.
+  var SCORE = {max: 10, min: 2, graceBase: 30, graceStep: 10, every: 20};
+  function graceSeconds(len) { return SCORE.graceBase + (len - 5) * SCORE.graceStep; }
+  function coinsFor(guessCount, seconds, len) {
+    var late = Math.floor(Math.max(0, seconds - graceSeconds(len)) / SCORE.every);
+    return Math.max(SCORE.min, SCORE.max - (Math.max(1, guessCount) - 1) - late);
+  }
+  function fmtTime(ms) {
+    var s = Math.floor(ms / 1000), m = Math.floor(s / 60), r = s % 60;
+    return (m < 10 ? "0" : "") + m + ":" + (r < 10 ? "0" : "") + r;
+  }
+
   var T = {
     tr: {
       settings: "Ayarlar", close: "Kapat", lang: "Dil", length: "Kelime uzunluğu", tries: "Deneme hakkı",
@@ -22,8 +36,18 @@ absolute birthday calendar daughter elephant favorite generous hospital internet
       newWord: "Yeni kelime", next: "Sonraki kelime", short: "Yetersiz harf",
       notInList: "Kelime listede yok", loading: "Sözlük yükleniyor…", credit: "Sözlük: Vikisözlük ve wordfreq verileri (CC BY-SA)",
       enter: "GİR", del: "SİL",
+      start: "Başla", roundCoin: "Bu tur", points: "Puanlama",
+      hint: function (max) { return "Hızlı ve az tahminle bul, " + max + " coine kadar kazan."; },
+      rules: function (grace) {
+        return [
+          "Her tur " + SCORE.max + " coinle başlar.",
+          "İlk tahminden sonra her tahmin 1 coin düşürür.",
+          grace + " saniyeden sonra her " + SCORE.every + " saniye 1 coin düşürür.",
+          "En az " + SCORE.min + " coin kazanırsın. Bulamazsan 0 coin."
+        ];
+      },
       goal: function (n) { return n + " harfli kelimeyi bul"; },
-      win: function (n) { return "Buldun! " + n + ". denemede."; },
+      win: function (n, time, coins) { return "Buldun! " + n + ". denemede · " + time + " · +" + coins + " coin"; },
       lose: function (w) { return "Kelime: " + w; }
     },
     en: {
@@ -33,8 +57,18 @@ absolute birthday calendar daughter elephant favorite generous hospital internet
       newWord: "New word", next: "Next word", short: "Not enough letters",
       notInList: "Not in word list", loading: "Loading dictionary…", credit: "Dictionary: word-list (MIT), wordfreq",
       enter: "ENTER", del: "DEL",
+      start: "Start", roundCoin: "Round", points: "Scoring",
+      hint: function (max) { return "Solve it fast and in few guesses to earn up to " + max + " coins."; },
+      rules: function (grace) {
+        return [
+          "Every round starts at " + SCORE.max + " coins.",
+          "Each guess after the first costs 1 coin.",
+          "After " + grace + " seconds, every " + SCORE.every + " seconds costs 1 coin.",
+          "You earn at least " + SCORE.min + " coins for a solve. No solve earns 0."
+        ];
+      },
       goal: function (n) { return "Find the " + n + "-letter word"; },
-      win: function (n) { return "Found it in " + n + (n === 1 ? " guess." : " guesses."); },
+      win: function (n, time, coins) { return "Found it in " + n + (n === 1 ? " guess" : " guesses") + " · " + time + " · +" + coins + " coins"; },
       lose: function (w) { return "The word was " + w; }
     }
   };
@@ -96,15 +130,61 @@ absolute birthday calendar daughter elephant favorite generous hospital internet
   }
   var stats = Object.assign({played: 0, won: 0, streak: 0}, load("fmp-stats", {}));
   var playedWords = load("fmp-played", {});
+  var totalCoins = Number(load("fmp-coins", 0)) || 0;
 
   var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   var boardEl = document.getElementById("board");
   var msgEl = document.getElementById("msg");
   var nextBtn = document.getElementById("nextBtn");
   var kbEl = document.getElementById("kb");
+  var clockEl = document.getElementById("clock");
+  var nowEl = document.getElementById("nowCoins");
+  var nowItem = document.getElementById("nowItem");
+  var totalEl = document.getElementById("totalCoins");
+  var startOverlay = document.getElementById("startOverlay");
+  var startBtn = document.getElementById("startBtn");
+  var startHint = document.getElementById("startHint");
 
   var target = [], cur = [], guesses = [], keyState = {};
   var over = false, busy = false, toastTimer = null;
+  // started: the round is running (Start was pressed). ready: dictionary loaded and word picked.
+  var started = false, ready = false, startTime = 0, elapsedMs = 0, clockTimer = null;
+
+  function setLevel(c) { nowItem.dataset.level = c >= 8 ? "high" : c >= 5 ? "mid" : "low"; }
+  function tick() {
+    elapsedMs = Date.now() - startTime;
+    clockEl.textContent = fmtTime(elapsedMs);
+    // Coins you would earn if you solved the word with your next guess
+    var c = coinsFor(guesses.length + 1, elapsedMs / 1000, settings.len);
+    nowEl.textContent = c;
+    setLevel(c);
+  }
+  function stopClock() {
+    clearInterval(clockTimer);
+    clockTimer = null;
+    if (started) {
+      elapsedMs = Date.now() - startTime;
+      clockEl.textContent = fmtTime(elapsedMs);
+    }
+  }
+  function resetHud() {
+    stopClock();
+    elapsedMs = 0;
+    clockEl.textContent = "00:00";
+    nowEl.textContent = SCORE.max;
+    setLevel(SCORE.max);
+    totalEl.textContent = totalCoins;
+  }
+  function startRound() {
+    if (started || !ready) return;
+    started = true;
+    busy = false;
+    startOverlay.hidden = true;
+    kbEl.classList.remove("off");
+    startTime = Date.now();
+    tick();
+    clockTimer = setInterval(tick, 250);
+  }
 
   function lang() { return settings.lang; }
   function up(ch) { return ch.toLocaleUpperCase(LOC[lang()]); }
@@ -198,18 +278,18 @@ absolute birthday calendar daughter elephant favorite generous hospital internet
   }
 
   function add(ch) {
-    if (over || busy || cur.length >= settings.len) return;
+    if (!started || over || busy || cur.length >= settings.len) return;
     cur.push(ch);
     renderCurrent();
   }
   function del() {
-    if (over || busy || !cur.length) return;
+    if (!started || over || busy || !cur.length) return;
     cur.pop();
     renderCurrent();
   }
 
   function submit() {
-    if (over || busy) return;
+    if (!started || over || busy) return;
     function shakeRow() {
       var row = boardEl.children[guesses.length];
       row.classList.remove("shake");
@@ -235,6 +315,11 @@ absolute birthday calendar daughter elephant favorite generous hospital internet
     cur = [];
     busy = true;
 
+    // The clock stops at the moment the last guess is sent, not after the tile animation.
+    var won = res.every(function (r) { return r === "good"; });
+    if (won || guesses.length >= settings.tries) stopClock();
+    var token = gameToken;
+
     var tiles = rowTiles(rowIndex);
     for (var i = 0; i < settings.len; i++) {
       (function (i) {
@@ -249,6 +334,7 @@ absolute birthday calendar daughter elephant favorite generous hospital internet
     }
     var total = reduce ? 0 : (settings.len - 1) * 230 + 460;
     setTimeout(function () {
+      if (token !== gameToken) return; // a new game started while the tiles were flipping
       var rank = {miss: 1, near: 2, good: 3};
       for (var k = 0; k < guess.length; k++) {
         var prev = keyState[guess[k]];
@@ -256,7 +342,6 @@ absolute birthday calendar daughter elephant favorite generous hospital internet
       }
       refreshKeys();
       busy = false;
-      var won = res.every(function (r) { return r === "good"; });
       if (won) finish(true);
       else if (guesses.length >= settings.tries) finish(false);
     }, total);
@@ -268,8 +353,21 @@ absolute birthday calendar daughter elephant favorite generous hospital internet
     if (won) { stats.won += 1; stats.streak += 1; } else { stats.streak = 0; }
     save("fmp-stats", stats);
     renderStats();
+
+    var earned = won ? coinsFor(guesses.length, elapsedMs / 1000, settings.len) : 0;
+    totalCoins += earned;
+    save("fmp-coins", totalCoins);
+    totalEl.textContent = totalCoins;
+    nowEl.textContent = earned;
+    setLevel(earned);
+    if (earned) {
+      totalEl.classList.remove("bump");
+      void totalEl.offsetWidth;
+      totalEl.classList.add("bump");
+    }
+
     var t = T[lang()];
-    msgEl.textContent = won ? t.win(guesses.length) : t.lose(target.join(""));
+    msgEl.textContent = won ? t.win(guesses.length, fmtTime(elapsedMs), earned) : t.lose(target.join(""));
     nextBtn.textContent = t.next;
     nextBtn.hidden = false;
     nextBtn.focus({preventScroll: true});
@@ -288,6 +386,14 @@ absolute birthday calendar daughter elephant favorite generous hospital internet
     document.querySelectorAll("[data-i18n-label]").forEach(function (el) { el.setAttribute("aria-label", t[el.dataset.i18nLabel]); });
     document.getElementById("panel").setAttribute("aria-label", t.settings);
     document.getElementById("goal").textContent = t.goal(settings.len);
+    startHint.textContent = t.hint(SCORE.max);
+    var rulesEl = document.getElementById("rules");
+    rulesEl.innerHTML = "";
+    t.rules(graceSeconds(settings.len)).forEach(function (s) {
+      var li = document.createElement("li");
+      li.textContent = s;
+      rulesEl.appendChild(li);
+    });
     document.querySelectorAll(".seg").forEach(function (seg) {
       seg.querySelectorAll("button").forEach(function (b) {
         b.setAttribute("aria-pressed", String(String(settings[seg.dataset.group]) === b.dataset.val));
@@ -296,20 +402,29 @@ absolute birthday calendar daughter elephant favorite generous hospital internet
   }
 
   var gameToken = 0;
-  function newGame() {
+  // autostart: true when the player pressed "Next word" and the clock should run at once.
+  // Otherwise the board waits behind the Start button (first visit, new settings, "New word").
+  function newGame(autostart) {
     var token = ++gameToken, l = lang();
     cur = []; guesses = []; keyState = {}; target = [];
-    over = false; busy = true;
+    over = false; busy = true; started = false; ready = false;
     nextBtn.hidden = true;
+    msgEl.textContent = "";
     applyLanguage();
     buildBoard();
     buildKeyboard();
-    msgEl.textContent = valid[l] ? "" : T[l].loading;
+    resetHud();
+    kbEl.classList.add("off");
+    startOverlay.hidden = false;
+    startBtn.disabled = true;
+    startBtn.textContent = T[l].loading;
     loadDict(l).then(function () {
       if (token !== gameToken) return;
       target = Array.from(up(pickWord()));
-      msgEl.textContent = "";
-      busy = false;
+      ready = true;
+      startBtn.disabled = false;
+      startBtn.textContent = T[l].start;
+      if (autostart) startRound();
     });
   }
 
@@ -328,18 +443,19 @@ absolute birthday calendar daughter elephant favorite generous hospital internet
       settings[group] = val;
       save("fmp-settings", settings);
       b.blur();
-      newGame();
+      newGame(false);
     });
   });
-  document.getElementById("newBtn").addEventListener("click", function (e) { e.currentTarget.blur(); newGame(); closePanel(); });
-  nextBtn.addEventListener("click", function () { newGame(); });
+  document.getElementById("newBtn").addEventListener("click", function (e) { e.currentTarget.blur(); newGame(false); closePanel(); });
+  nextBtn.addEventListener("click", function () { newGame(true); });
+  startBtn.addEventListener("click", function () { startRound(); });
 
   kbEl.addEventListener("click", function (e) {
     var b = e.target.closest(".key");
     if (!b) return;
     b.blur();
     var k = b.dataset.k;
-    if (k === "ENTER") { if (over) newGame(); else submit(); }
+    if (k === "ENTER") { if (over) newGame(true); else if (!started) startRound(); else submit(); }
     else if (k === "DEL") del();
     else add(k);
   });
@@ -352,7 +468,7 @@ absolute birthday calendar daughter elephant favorite generous hospital internet
     if (e.key === "Enter") {
       if (tgt && tgt.tagName === "BUTTON") return;
       e.preventDefault();
-      if (over) newGame(); else submit();
+      if (over) newGame(true); else if (!started) startRound(); else submit();
       return;
     }
     if (e.key === "Backspace") { e.preventDefault(); del(); return; }

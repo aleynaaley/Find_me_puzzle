@@ -29,8 +29,29 @@
       </button>
     </header>
 
+    <div class="hud" id="hud">
+      <div class="hud-item">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2.5h5"/></svg>
+        <b class="clock" id="clock" role="timer">00:00</b>
+      </div>
+      <div class="hud-item now" id="nowItem" data-level="high">
+        <span class="hud-label" data-i18n="roundCoin"></span>
+        <b id="nowCoins">10</b>
+      </div>
+      <div class="hud-item total">
+        <svg class="coin" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="var(--coin)"/><circle cx="12" cy="12" r="6.5" fill="none" stroke="var(--on-state)" stroke-width="1.6" opacity="0.85"/></svg>
+        <b id="totalCoins">0</b>
+      </div>
+    </div>
+
     <p class="goal" id="goal"></p>
-    <div class="board" id="board" aria-label="Oyun tahtası"></div>
+    <div class="board-wrap">
+      <div class="board" id="board" aria-label="Oyun tahtası"></div>
+      <div class="start" id="startOverlay">
+        <button class="primary big" id="startBtn" type="button" disabled></button>
+        <p class="start-hint" id="startHint"></p>
+      </div>
+    </div>
 
     <div class="status">
       <p id="msg" role="status" aria-live="polite"></p>
@@ -82,6 +103,11 @@
         <li><span class="tile near" aria-hidden="true">B</span><span data-i18n="near"></span></li>
         <li><span class="tile miss" aria-hidden="true">C</span><span data-i18n="miss"></span></li>
       </ul>
+    </section>
+
+    <section>
+      <p class="label" data-i18n="points"></p>
+      <ul class="rules" id="rules"></ul>
     </section>
 
     <section>
