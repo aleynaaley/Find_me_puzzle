@@ -205,6 +205,7 @@ absolute birthday calendar daughter elephant favorite generous hospital internet
   function buildBoard() {
     boardEl.innerHTML = "";
     boardEl.style.setProperty("--len", settings.len);
+    boardEl.style.setProperty("--rows", settings.tries);
     for (var r = 0; r < settings.tries; r++) {
       var row = document.createElement("div");
       row.className = "row";

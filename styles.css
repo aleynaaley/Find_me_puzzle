@@ -63,7 +63,8 @@ button { font-family: inherit; color: inherit; }
 button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 .app { max-width: 1040px; margin: 0 auto; }
-main { display: flex; flex-direction: column; align-items: center; gap: 16px; padding-block: 16px 28px; min-width: 0; }
+/* The page is exactly one screen tall: the board gets whatever height is left after the other rows. */
+main { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-block: 12px; min-width: 0; height: 100vh; height: 100dvh; }
 
 header { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -76,7 +77,16 @@ h1 { margin: 0; font: 700 20px/1.1 var(--font-display); letter-spacing: -0.01em;
 .goal { margin: 0; color: var(--muted); text-align: center; }
 .icon-btn { width: 40px; height: 40px; display: grid; place-items: center; border: 1px solid var(--line); background: transparent; border-radius: 8px; cursor: pointer; flex: none; }
 
+/* Tile size: the largest square that fits the board area both across and down (max 62px, min 24px).
+   --len is the word length and --rows the number of guesses, both set from app.js. */
 .board { display: grid; gap: 6px; --tile: min(62px, calc((100vw - 40px - 6px * (var(--len) - 1)) / var(--len))); }
+@supports (width: 1cqw) {
+  .board {
+    --tile: max(24px, min(62px,
+      calc((100cqw - 6px * (var(--len) - 1)) / var(--len)),
+      calc((100cqh - 6px * (var(--rows) - 1)) / var(--rows))));
+  }
+}
 .row { display: grid; grid-template-columns: repeat(var(--len), var(--tile)); gap: 6px; justify-content: center; }
 .tile {
   width: var(--tile); height: var(--tile);
@@ -95,14 +105,15 @@ h1 { margin: 0; font: 700 20px/1.1 var(--font-display); letter-spacing: -0.01em;
 @keyframes flip { 50% { transform: scaleY(0); } }
 @keyframes shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
 
-.status { display: flex; flex-direction: column; align-items: center; gap: 10px; min-height: 52px; text-align: center; }
+.status { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 14px; min-height: 40px; text-align: center; }
 #msg { margin: 0; min-height: 22px; font-weight: 500; }
+@media (max-width: 560px) { .status { min-height: 76px; } }
 .primary { background: var(--fg); color: var(--bg); border: 0; border-radius: 6px; padding: 10px 18px; font: 600 14px var(--font-body); cursor: pointer; }
 .primary:hover { opacity: 0.88; }
 
-.kb { width: 100%; max-width: 520px; display: grid; gap: 6px; }
+.kb { width: 100%; max-width: 520px; display: grid; gap: 6px; flex: none; }
 .kr { display: flex; gap: 5px; justify-content: center; }
-.key { flex: 1 1 0; min-width: 0; height: 52px; border: 0; border-radius: 6px; background: var(--key); color: var(--fg); font: 600 14px var(--font-body); cursor: pointer; padding: 0; }
+.key { flex: 1 1 0; min-width: 0; height: clamp(36px, 6.2vh, 52px); border: 0; border-radius: 6px; background: var(--key); color: var(--fg); font: 600 14px var(--font-body); cursor: pointer; padding: 0; }
 .key.wide { flex: 1.6 1 0; font-size: 12px; }
 .key.good { background: var(--good); color: var(--on-state); }
 .key.near { background: var(--near); color: var(--on-state); }
@@ -159,9 +170,13 @@ body.open #scrim { display: block; }
 @keyframes bump { 40% { transform: scale(1.35); } }
 
 /* Start overlay on top of the board */
-.board-wrap { position: relative; display: grid; justify-items: center; max-width: 100%; }
+.board-wrap {
+  position: relative; flex: 1 1 0; min-height: 0; width: 100%;
+  display: flex; align-items: center; justify-content: center;
+  container-type: size;
+}
 .start {
-  position: absolute; inset: -8px; z-index: 5;
+  position: absolute; inset: 0; z-index: 5;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
   padding: 16px; text-align: center; border-radius: 10px;
   background: var(--bg);
@@ -173,6 +188,7 @@ body.open #scrim { display: block; }
 .primary.big { padding: 14px 32px; font-size: 16px; }
 .primary:disabled { opacity: 0.6; cursor: default; }
 .kb.off { opacity: 0.45; pointer-events: none; }
+main > :not(.board-wrap) { flex: none; }
 
 .rules { margin: 0; padding-left: 18px; display: grid; gap: 4px; color: var(--fg); }
 .rules li::marker { color: var(--muted); }
@@ -181,9 +197,11 @@ body.open #scrim { display: block; }
   .app { display: grid; grid-template-columns: minmax(0, 1fr) 288px; column-gap: 48px; align-items: start; }
   .icon-btn.gear, #closeBtn, #scrim, body.open #scrim { display: none; }
   .panel {
-    position: sticky; top: 16px; margin-top: 16px; z-index: auto;
+    position: sticky; top: 12px; margin-top: 12px; z-index: auto;
     width: auto; transform: none; visibility: visible;
-    border: 1px solid var(--line); border-radius: 10px; padding: 20px; overflow: visible;
+    border: 1px solid var(--line); border-radius: 10px; padding: 18px; gap: 16px;
+    /* never taller than the screen; scrolls inside itself on short screens */
+    max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow-y: auto;
   }
 }
 @media (prefers-reduced-motion: reduce) {
